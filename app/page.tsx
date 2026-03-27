@@ -1107,6 +1107,28 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       ) {
         return rows;
       }
+      if (previewType === 'thumbnail') {
+        const supportedSet = new Set<RatingPreference>(THUMBNAIL_SUPPORTED_RATINGS);
+        const thumbnailRows = rows.filter((row) => supportedSet.has(row.id));
+        if (fromIndex >= thumbnailRows.length || toIndex >= thumbnailRows.length) {
+          return rows;
+        }
+
+        const reorderedThumbnailRows = [...thumbnailRows];
+        const [item] = reorderedThumbnailRows.splice(fromIndex, 1);
+        reorderedThumbnailRows.splice(toIndex, 0, item);
+
+        let thumbnailCursor = 0;
+        return rows.map((row) => {
+          if (!supportedSet.has(row.id)) {
+            return row;
+          }
+          const nextRow = reorderedThumbnailRows[thumbnailCursor];
+          thumbnailCursor += 1;
+          return nextRow;
+        });
+      }
+
       const copy = [...rows];
       const [item] = copy.splice(fromIndex, 1);
       copy.splice(toIndex, 0, item);

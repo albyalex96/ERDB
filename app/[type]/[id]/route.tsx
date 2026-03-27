@@ -3743,8 +3743,8 @@ export async function GET(
   if (idPrefix === 'tmdb') {
     isTmdb = true;
     const explicitTypeCandidate = (parts[1] || '').trim().toLowerCase();
-    if (explicitTypeCandidate === 'movie' || explicitTypeCandidate === 'tv') {
-      explicitTmdbMediaType = explicitTypeCandidate as 'movie' | 'tv';
+    if (explicitTypeCandidate === 'movie' || explicitTypeCandidate === 'tv' || explicitTypeCandidate === 'series') {
+      explicitTmdbMediaType = explicitTypeCandidate === 'series' ? 'tv' : (explicitTypeCandidate as 'movie' | 'tv');
       mediaId = parts[2];
       season = parts.length > 3 ? parts[3] : null;
       episode = parts.length > 4 ? parts[4] : null;
@@ -3785,9 +3785,14 @@ export async function GET(
       : imageType === 'backdrop' || imageType === 'thumbnail'
         ? backdropRatings
         : logoRatings;
+  const thumbnailSupportedRatings = new Set<RatingPreference>(['tmdb', 'imdb']);
   const requestedRatingPreferences =
     imageType === 'thumbnail'
-      ? (['tmdb', 'imdb'] as RatingPreference[])
+      ? (ratingsForType === null || ratingsForType === undefined
+          ? (['tmdb', 'imdb'] as RatingPreference[])
+          : parseRatingPreferencesAllowEmpty(ratingsForType).filter((rating) =>
+              thumbnailSupportedRatings.has(rating)
+            ))
       : ratingsForType === null || ratingsForType === undefined
         ? [...ALL_RATING_PREFERENCES]
         : parseRatingPreferencesAllowEmpty(ratingsForType);
