@@ -185,8 +185,13 @@ export const normalizeErdbId = (
 
   if (prefix === 'tmdb') {
     const explicitTypeCandidate = (parts[1] || '').trim().toLowerCase();
-    if ((explicitTypeCandidate === 'movie' || explicitTypeCandidate === 'tv') && parts.length >= 3 && parts[2]) {
-      return `tmdb:${explicitTypeCandidate}:${parts[2]}`;
+    if (
+      (explicitTypeCandidate === 'movie' || explicitTypeCandidate === 'tv' || explicitTypeCandidate === 'series') &&
+      parts.length >= 3 &&
+      parts[2]
+    ) {
+      const normalizedType = explicitTypeCandidate === 'series' ? 'tv' : explicitTypeCandidate;
+      return `tmdb:${normalizedType}:${parts[2]}`;
     }
 
     if (parts.length >= 2 && parts[1]) {
