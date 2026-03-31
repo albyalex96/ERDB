@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.21](https://github.com/realbestia1/erdb/compare/v0.1.20...v0.1.21) - 2026-03-31
+
+- switch AiOMetadata non-thumbnail patterns to IMDb IDs ([7a4436b](https://github.com/realbestia1/erdb/commit/7a4436b07684697751a7ed947cdb5260e4751e47))
+
 ## [0.1.20](https://github.com/realbestia1/erdb/compare/v0.1.19...v0.1.20) - 2026-03-31
 
 - Bump to v0.1.20 and improve TMDB logo/image rendering ([60dfda6](https://github.com/realbestia1/erdb/commit/60dfda61399d77ef87863fdb80a2c153f79f2ca5))
