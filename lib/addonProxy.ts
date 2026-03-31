@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto';
+import {
+  normalizeProxyCatalogBooleanOverrides,
+  normalizeProxyCatalogKeyList,
+  normalizeProxyCatalogNameOverrides,
+} from '@/lib/proxyCatalog';
 
 const ERDB_OPTIONAL_PARAMS = [
   'ratings',
@@ -56,11 +61,16 @@ export const ERDB_RESERVED_PARAMS = new Set<string>([
   'mdblistKey',
   'simklClientId',
   'erdbBase',
+  'seriesMetadataProvider',
   'translateMeta',
   'posterEnabled',
   'backdropEnabled',
   'logoEnabled',
   'thumbnailEnabled',
+  'catalogNames',
+  'hiddenCatalogs',
+  'searchDisabledCatalogs',
+  'discoverOnlyCatalogs',
   'ratingStyle',
   'imageText',
   'posterRatingStyle',
@@ -106,12 +116,17 @@ export type ProxyConfig = {
   backdropVerticalBadgeContent?: string;
   thumbnailVerticalBadgeContent?: string;
   thumbnailSize?: string;
+  seriesMetadataProvider?: string;
   aiometadataProvider?: string;
   erdbBase?: string;
   posterEnabled?: boolean;
   backdropEnabled?: boolean;
   logoEnabled?: boolean;
   thumbnailEnabled?: boolean;
+  catalogNames?: Record<string, string>;
+  hiddenCatalogs?: string[];
+  searchDisabledCatalogs?: string[];
+  discoverOnlyCatalogs?: Record<string, boolean>;
 };
 
 const PROXY_OPTIONAL_STRING_KEYS = [
@@ -145,6 +160,7 @@ const PROXY_OPTIONAL_STRING_KEYS = [
   'backdropVerticalBadgeContent',
   'thumbnailVerticalBadgeContent',
   'thumbnailSize',
+  'seriesMetadataProvider',
   'aiometadataProvider',
   'erdbBase',
  ] as const satisfies readonly (keyof ProxyConfig)[];
@@ -316,6 +332,26 @@ export const decodeProxyConfig = (encoded: string): ProxyConfig | null => {
       if (value !== undefined) {
         config[key] = value;
       }
+    }
+    const catalogNames = normalizeProxyCatalogNameOverrides((parsed as ProxyConfig).catalogNames);
+    if (catalogNames) {
+      config.catalogNames = catalogNames;
+    }
+    const hiddenCatalogs = normalizeProxyCatalogKeyList((parsed as ProxyConfig).hiddenCatalogs);
+    if (hiddenCatalogs) {
+      config.hiddenCatalogs = hiddenCatalogs;
+    }
+    const searchDisabledCatalogs = normalizeProxyCatalogKeyList(
+      (parsed as ProxyConfig).searchDisabledCatalogs
+    );
+    if (searchDisabledCatalogs) {
+      config.searchDisabledCatalogs = searchDisabledCatalogs;
+    }
+    const discoverOnlyCatalogs = normalizeProxyCatalogBooleanOverrides(
+      (parsed as ProxyConfig).discoverOnlyCatalogs
+    );
+    if (discoverOnlyCatalogs) {
+      config.discoverOnlyCatalogs = discoverOnlyCatalogs;
     }
     return config;
   } catch (error) {

@@ -36,6 +36,11 @@ import {
   normalizeRatingStyle,
   type RatingStyle,
 } from '@/lib/ratingStyle';
+import {
+  buildIncludeImageLanguage,
+  getTmdbLanguageBase,
+  normalizeTmdbLanguageCode,
+} from '@/lib/tmdbLanguage';
 import { findImdbEpisodeBySeriesSeasonEpisode, getImdbEpisodeFromDataset, getImdbRatingFromDataset } from '@/lib/imdbDataset';
 import { scheduleImdbDatasetSync } from '@/lib/imdbDatasetSync';
 // Removed mdblistRequestLogs import
@@ -256,6 +261,20 @@ const streamBadgesInFlight = new Map<string, Promise<StreamBadgesResult>>();
 const mdbListRateLimitedUntil = new Map<string, number>();
 let mdbListApiKeyCursor = 0;
 const sha1Hex = (value: string) => createHash('sha1').update(value).digest('hex');
+const buildSecretCacheSeed = (name: string, value?: string | null) => {
+  const normalized = String(value || '').trim();
+  return normalized ? `${name}:${sha1Hex(normalized).slice(0, 12)}` : `${name}:none`;
+};
+const buildMdbListCacheSeed = (manualApiKey?: string | null) => {
+  const normalizedManual = String(manualApiKey || '').trim();
+  if (normalizedManual) {
+    return `mdblist:manual:${sha1Hex(normalizedManual).slice(0, 12)}`;
+  }
+  if (!MDBLIST_API_KEYS.length) {
+    return 'mdblist:none';
+  }
+  return `mdblist:pool:${sha1Hex(MDBLIST_API_KEYS.join('|')).slice(0, 12)}`;
+};
 const safeCompareText = (left: string, right: string) => {
   if (!left || !right || left.length !== right.length) {
     return false;
@@ -1142,7 +1161,7 @@ const fetchAnimemappingPayload = async ({
   }
   const query = searchParams.toString();
   const cacheKey = `animemapping:${provider}:${normalizedExternalId}:s:${normalizedSeason || '-'}:e:${normalizedEpisode || '-'}`;
-  const url = `https://animemapping.stremio.dpdns.org/${provider}/${encodeURIComponent(normalizedExternalId)}${query ? `?${query}` : ''}`;
+  const url = `https://animemapping.realbestia.com/${provider}/${encodeURIComponent(normalizedExternalId)}${query ? `?${query}` : ''}`;
 
   try {
     const response = await fetchJsonCached(
@@ -1389,6 +1408,23 @@ const fetchKitsuFallbackAsset = async (
 const fetchKitsuRating = async (kitsuId: string, phases: PhaseDurations) => {
   const attributes = await fetchKitsuAnimeAttributes(kitsuId, phases);
   return normalizeRatingValue(attributes?.averageRating);
+};
+
+// Older proxy URLs may still include a placeholder season: `kitsu:id:season:episode`.
+const parseKitsuInputParts = (parts: string[]) => {
+  const mediaId = parts[1] || '';
+  if (parts.length >= 4) {
+    return {
+      mediaId,
+      season: null,
+      episode: parts[3] || null,
+    };
+  }
+  return {
+    mediaId,
+    season: null,
+    episode: parts.length > 2 ? parts[2] : null,
+  };
 };
 
 const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
@@ -1710,37 +1746,58 @@ const resolveTmdbEpisodeByYearBucket = async (
   };
 };
 
-const normalizeImageLanguage = (value?: string | null) => {
-  if (!value) return null;
-  const normalized = value.toLowerCase();
-  if (normalized === 'us' || normalized === 'en-us') return 'en';
-  if (normalized.includes('-')) return normalized.split('-')[0];
-  return normalized;
-};
+const getImageLanguageTag = (item: any) => {
+  if (!item?.iso_639_1) return null;
+  if (typeof item?.iso_3166_1 === 'string' && item.iso_3166_1.trim()) {
+    return `${item.iso_639_1}-${item.iso_3166_1}`;
+  }
 
-const buildIncludeImageLanguage = (preferredLang: string, fallbackLang: string) => {
-  const languages = [normalizeImageLanguage(preferredLang), normalizeImageLanguage(fallbackLang), 'null']
-    .filter(Boolean) as string[];
-  return [...new Set(languages)].join(',');
+  return item.iso_639_1;
 };
 
 const pickByLanguageWithFallback = (
   items: any[] = [],
   preferredLang: string,
-  fallbackLang: string
+  fallbackLang: string,
+  preferredPath?: string | null
 ) => {
   if (!Array.isArray(items) || items.length === 0) return null;
 
-  const preferred = normalizeImageLanguage(preferredLang);
-  const fallback = normalizeImageLanguage(fallbackLang);
+  if (preferredPath) {
+    const preferredPathItem = items.find((item: any) => item?.file_path === preferredPath);
+    if (preferredPathItem) {
+      return preferredPathItem;
+    }
+  }
+
+  const findItemByLanguage = (language: string | null) => {
+    if (!language) {
+      return null;
+    }
+
+    const exactMatch = items.find((item: any) => normalizeTmdbLanguageCode(getImageLanguageTag(item)) === language);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const baseLanguage = getTmdbLanguageBase(language);
+    if (!baseLanguage) {
+      return null;
+    }
+
+    return items.find((item: any) => getTmdbLanguageBase(getImageLanguageTag(item)) === baseLanguage) || null;
+  };
+
+  const preferred = normalizeTmdbLanguageCode(preferredLang);
+  const fallback = normalizeTmdbLanguageCode(fallbackLang);
 
   if (preferred) {
-    const preferredItem = items.find((item: any) => normalizeImageLanguage(item?.iso_639_1) === preferred);
+    const preferredItem = findItemByLanguage(preferred);
     if (preferredItem) return preferredItem;
   }
 
   if (fallback) {
-    const fallbackItem = items.find((item: any) => normalizeImageLanguage(item?.iso_639_1) === fallback);
+    const fallbackItem = findItemByLanguage(fallback);
     if (fallbackItem) return fallbackItem;
   }
 
@@ -1752,7 +1809,7 @@ const isTextlessPosterSelection = (posters: any[] = [], selectedPoster?: any | n
 
   return posters.some(
     (poster: any) =>
-      poster?.file_path === selectedPoster.file_path && normalizeImageLanguage(poster?.iso_639_1) === null
+      poster?.file_path === selectedPoster.file_path && normalizeTmdbLanguageCode(getImageLanguageTag(poster)) === null
   );
 };
 
@@ -1766,8 +1823,8 @@ const pickPosterByPreference = (
   if (!Array.isArray(posters) || posters.length === 0) return null;
 
   const canonicalOriginalPath =
+    pickByLanguageWithFallback(posters, preferredLang, fallbackLang, originalPosterPath)?.file_path ||
     originalPosterPath ||
-    pickByLanguageWithFallback(posters, preferredLang, fallbackLang)?.file_path ||
     posters[0]?.file_path ||
     null;
   const originalPoster = canonicalOriginalPath
@@ -1781,7 +1838,7 @@ const pickPosterByPreference = (
   if (preference === 'clean') {
     return (
       posters.find((poster: any) => !poster.iso_639_1) ||
-      pickByLanguageWithFallback(posters, preferredLang, fallbackLang) ||
+      pickByLanguageWithFallback(posters, preferredLang, fallbackLang, originalPosterPath) ||
       fallbackOriginal
     );
   }
@@ -1807,8 +1864,8 @@ const pickBackdropByPreference = (
   if (!Array.isArray(backdrops) || backdrops.length === 0) return null;
 
   const canonicalOriginalPath =
+    pickByLanguageWithFallback(backdrops, preferredLang, fallbackLang, originalBackdropPath)?.file_path ||
     originalBackdropPath ||
-    pickByLanguageWithFallback(backdrops, preferredLang, fallbackLang)?.file_path ||
     backdrops[0]?.file_path ||
     null;
   const originalBackdrop = canonicalOriginalPath
@@ -1823,7 +1880,7 @@ const pickBackdropByPreference = (
   if (preference === 'clean') {
     return (
       backdrops.find((backdrop: any) => !backdrop.iso_639_1) ||
-      pickByLanguageWithFallback(backdrops, preferredLang, fallbackLang) ||
+      pickByLanguageWithFallback(backdrops, preferredLang, fallbackLang, originalBackdropPath) ||
       fallbackOriginal
     );
   }
@@ -4561,7 +4618,14 @@ export async function GET(
     request.nextUrl.searchParams.get('backdropVerticalBadgeContent') ||
     request.nextUrl.searchParams.get('verticalBadgeContent')
   );
-  const verticalBadgeContent = imageType === 'poster' ? posterVerticalBadgeContent : imageType === 'thumbnail' ? thumbnailVerticalBadgeContent : backdropVerticalBadgeContent;
+  const verticalBadgeContent =
+    imageType === 'poster'
+      ? posterVerticalBadgeContent
+      : imageType === 'thumbnail'
+        ? thumbnailVerticalBadgeContent
+        : imageType === 'backdrop'
+          ? backdropVerticalBadgeContent
+          : 'standard';
   const thumbnailSize = normalizeThumbnailSize(request.nextUrl.searchParams.get('thumbnailSize'));
   const globalStreamBadgesSetting = normalizeStreamBadgesSetting(request.nextUrl.searchParams.get('streamBadges'));
   const posterStreamBadgesSetting = normalizeStreamBadgesSetting(
@@ -4663,8 +4727,10 @@ export async function GET(
     episode = parts.length > 3 ? parts[3] : null;
   } else if (idPrefix === 'kitsu') {
     isKitsu = true;
-    mediaId = parts[1];
-    episode = parts.length > 2 ? parts[2] : null;
+    const parsedKitsu = parseKitsuInputParts(parts);
+    mediaId = parsedKitsu.mediaId;
+    season = parsedKitsu.season;
+    episode = parsedKitsu.episode;
   } else if (idPrefix === 'imdb' && inputAnimeMappingExternalId) {
     mediaId = inputAnimeMappingExternalId;
     season = parts.length > 2 ? parts[2] : null;
@@ -4678,7 +4744,7 @@ export async function GET(
     episode = parts.length > 2 ? parts[2] : null;
   }
 
-  const requestedImageLang = normalizeImageLanguage(lang) || FALLBACK_IMAGE_LANGUAGE;
+  const requestedImageLang = normalizeTmdbLanguageCode(lang) || FALLBACK_IMAGE_LANGUAGE;
   const includeImageLanguage = buildIncludeImageLanguage(requestedImageLang, FALLBACK_IMAGE_LANGUAGE);
   const posterTextPreference: PosterTextPreference =
     imageText === 'clean' || imageText === 'alternative' || imageText === 'original'
@@ -4725,6 +4791,8 @@ export async function GET(
     shouldApplyRatings || shouldApplyStreamBadges || (imageType === 'poster' && posterTextPreference === 'clean');
   const effectiveRatingPreferences = shouldApplyRatings ? Array.from(new Set<RatingPreference>(ratingPreferences)) : [];
   const selectedRatings = new Set<RatingPreference>(effectiveRatingPreferences);
+  const mdblistCacheSeed = buildMdbListCacheSeed(mdblistKey);
+  const simklCacheSeed = buildSecretCacheSeed('simkl', simklClientId);
   const renderSeedKey = [
     FINAL_IMAGE_RENDERER_CACHE_VERSION,
     imageType,
@@ -4743,6 +4811,8 @@ export async function GET(
     imageType === 'thumbnail' ? thumbnailSize : '-',
     ratingStyle,
     effectiveRatingPreferences.join(',') || 'none',
+    mdblistCacheSeed,
+    simklCacheSeed,
     streamBadgesCacheKeySeed,
     'v1', // Static version since we no longer have tokenConfigVersion
   ].join('|');
@@ -4893,7 +4963,7 @@ export async function GET(
           }
         }
       } else if (isKitsu) {
-        let mappingUrl = `https://animemapping.stremio.dpdns.org/kitsu/${mediaId}`;
+        let mappingUrl = `https://animemapping.realbestia.com/kitsu/${mediaId}`;
         if (episode) {
           mappingUrl += `?ep=${episode}`;
         }
@@ -4935,7 +5005,7 @@ export async function GET(
         if (mappingSubtype !== 'movie' && !season) {
           const seasonProbeResponse = await fetchJsonCached(
             `kitsu:mapping:${mediaId}:1`,
-            `https://animemapping.stremio.dpdns.org/kitsu/${mediaId}?ep=1`,
+            `https://animemapping.realbestia.com/kitsu/${mediaId}?ep=1`,
             KITSU_CACHE_TTL_MS,
             phases,
             'tmdb'
@@ -5240,6 +5310,8 @@ export async function GET(
         verticalBadgeContent,
         ratingStyle,
         effectiveRatingPreferences.join(',') || 'none',
+        mdblistCacheSeed,
+        simklCacheSeed,
         streamBadgesCacheKey,
         'v1',
       ].join('|');
@@ -6002,6 +6074,8 @@ export async function GET(
           let posterCollection = input.posters || [];
           const backdropCollection = input.backdrops || [];
           const logoCollection = input.logos || [];
+          const preferredPosterPath = details?.poster_path || media?.poster_path || null;
+          const preferredBackdropPath = details?.backdrop_path || media?.backdrop_path || null;
           const selectedLogo = pickByLanguageWithFallback(
             logoCollection,
             requestedImageLang,
@@ -6010,18 +6084,24 @@ export async function GET(
           const logoPath = selectedLogo?.file_path || null;
 
           const localizedPosterPath =
-            pickByLanguageWithFallback(posterCollection, requestedImageLang, FALLBACK_IMAGE_LANGUAGE)?.file_path || null;
+            pickByLanguageWithFallback(
+              posterCollection,
+              requestedImageLang,
+              FALLBACK_IMAGE_LANGUAGE,
+              preferredPosterPath
+            )?.file_path || preferredPosterPath;
           let originalPosterPath =
             localizedPosterPath ||
-            details?.poster_path ||
-            media?.poster_path ||
             posterCollection[0]?.file_path;
           const localizedBackdropPath =
-            pickByLanguageWithFallback(backdropCollection, requestedImageLang, FALLBACK_IMAGE_LANGUAGE)?.file_path || null;
+            pickByLanguageWithFallback(
+              backdropCollection,
+              requestedImageLang,
+              FALLBACK_IMAGE_LANGUAGE,
+              preferredBackdropPath
+            )?.file_path || preferredBackdropPath;
           const originalBackdropPath =
             localizedBackdropPath ||
-            details?.backdrop_path ||
-            media?.backdrop_path ||
             backdropCollection[0]?.file_path;
 
           // Kitsu IDs usually represent a specific anime season: prefer season posters over unified show posters.
@@ -6083,7 +6163,12 @@ export async function GET(
 
             originalPosterPath =
               seasonPosterPath ||
-              pickByLanguageWithFallback(posterCollection, requestedImageLang, FALLBACK_IMAGE_LANGUAGE)?.file_path ||
+              pickByLanguageWithFallback(
+                posterCollection,
+                requestedImageLang,
+                FALLBACK_IMAGE_LANGUAGE,
+                seasonPosterPath
+              )?.file_path ||
               originalPosterPath;
           }
 

@@ -2,6 +2,13 @@
 
 ERDB generates poster/backdrop/logo/thumbnail images with dynamic ratings on-the-fly.
 
+[![Release](https://img.shields.io/github/v/release/realbestia1/erdb?display_name=tag&sort=semver&style=for-the-badge)](https://github.com/realbestia1/erdb/releases)
+[![Website](https://img.shields.io/badge/Website-easyratingsdb.com-0F766E?style=for-the-badge&logo=googlechrome&logoColor=white)](https://easyratingsdb.com/)
+[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Frealbestia1%2Ferdb-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/realbestia1/erdb/pkgs/container/erdb)
+[![License](https://img.shields.io/github/license/realbestia1/erdb?style=for-the-badge)](https://github.com/realbestia1/erdb/blob/main/LICENSE)
+
+[![Support on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/realbestia)
+
 ## Quick Start
 
 ## Install From GitHub
@@ -121,6 +128,7 @@ Main endpoint:
 
 ### Examples
 - **Poster with IMDb and TMDB**: `/poster/tt0133093.jpg?ratings=imdb,tmdb&lang=it`
+- **Spain Spanish poster**: `/poster/tt7798634.jpg?ratings=imdb,tmdb&lang=es-ES`
 - **Minimal backdrop**: `/backdrop/tmdb:603.jpg?ratings=mdblist&style=plain`
 
 ### Supported Query Parameters
@@ -129,7 +137,7 @@ Main endpoint:
 |-----------|-------------|------------------|---------|
 | `type` | Image type (Path) | `poster`, `backdrop`, `logo`, `thumbnail` | - |
 | `id` | Media ID (Path) | IMDb (tt...), TMDB (tmdb:..., tmdb:movie:..., tmdb:tv:..., tmdb:series:...), Kitsu (kitsu:...) | - |
-| `lang` | Image language | Any TMDB ISO 639-1 code (e.g. `it`, `en`, `es`, `fr`, `de`, `ru`, `ja`) | `en` |
+| `lang` | TMDB language code | Any TMDB language code (e.g. `it`, `en`, `es-ES`, `es-MX`, `pt-PT`, `pt-BR`) | `en` |
 | `streamBadges` | Quality badges via Torrentio (global fallback) | `auto`, `on`, `off` | `auto` |
 | `posterStreamBadges` | Poster quality badges | `auto`, `on`, `off` | `auto` |
 | `backdropStreamBadges` | Backdrop quality badges | `auto`, `on`, `off` | `auto` |
@@ -217,7 +225,7 @@ backdropRatings         | tmdb, mdblist, imdb, tomatoes, tomatoesaudience, lette
 logoRatings             | tmdb, mdblist, imdb, tomatoes, tomatoesaudience, letterboxd,         | all
                         | metacritic, metacriticuser, trakt, simkl, rogerebert,               |
                         | myanimelist, anilist, kitsu (logo only)                             |
-lang                    | Any TMDB ISO 639-1 code (en, it, fr, es, de, ja, ko, etc.)            | en
+lang                    | Any TMDB language code (en, it, es-ES, es-MX, pt-PT, pt-BR, etc.)    | en
 streamBadges            | auto, on, off (global fallback)                                      | auto
 posterStreamBadges      | auto, on, off (poster only)                                          | auto
 backdropStreamBadges    | auto, on, off (backdrop only)                                        | auto

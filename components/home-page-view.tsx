@@ -1,5 +1,7 @@
 'use client';
-import type { ChangeEvent, Dispatch, MouseEvent, RefObject, SetStateAction } from 'react';
+import { useEffect, useState, type ChangeEvent, type Dispatch, type MouseEvent, type RefObject, type SetStateAction } from 'react';
+import type { ProxyCatalogDescriptor } from '@/lib/proxyCatalog';
+import type { SupportedLanguage } from '@/lib/tmdbLanguage';
 import {
   Image as ImageIcon,
   Star,
@@ -48,16 +50,12 @@ import {
 type PreviewType = 'poster' | 'backdrop' | 'logo' | 'thumbnail';
 type ProxyType = PreviewType;
 type ProxyEnabledTypes = Record<ProxyType, boolean>;
-type SupportedLanguage = {
-  code: string;
-  label: string;
-  flag: string;
-};
 type StreamBadgesSetting = 'auto' | 'on' | 'off';
 type QualityBadgesSide = 'left' | 'right';
 type PosterQualityBadgesPosition = 'auto' | QualityBadgesSide;
 type AiometadataPatternType = 'poster' | 'background' | 'logo' | 'episodeThumbnail';
 type AiometadataEpisodeProvider = 'tvdb' | 'realimdb';
+type ProxySeriesMetadataProvider = 'tmdb' | 'imdb';
 type ProxyEpisodeProvider = 'custom' | 'realimdb';
 type VerticalBadgeContent = 'standard' | 'stacked';
 
@@ -70,6 +68,14 @@ type HomePageViewState = {
   mdblistKey: string;
   simklClientId: string;
   proxyManifestUrl: string;
+  proxyCatalogs: ProxyCatalogDescriptor[];
+  proxyCatalogNames: Record<string, string>;
+  proxyHiddenCatalogs: string[];
+  proxySearchDisabledCatalogs: string[];
+  proxyDiscoverOnlyCatalogs: Record<string, boolean>;
+  proxyCatalogsStatus: 'idle' | 'loading' | 'ready' | 'error';
+  proxyCatalogsError: string;
+  proxySeriesMetadataProvider: ProxySeriesMetadataProvider;
   proxyAiometadataProvider: ProxyEpisodeProvider;
   proxyEnabledTypes: ProxyEnabledTypes;
   proxyTranslateMeta: boolean;
@@ -144,6 +150,7 @@ type HomePageViewActions = {
   setThumbnailVerticalBadgeContent: Dispatch<SetStateAction<VerticalBadgeContent>>;
   setThumbnailSize: Dispatch<SetStateAction<ThumbnailSize>>;
   setAiometadataEpisodeProvider: Dispatch<SetStateAction<AiometadataEpisodeProvider>>;
+  setProxySeriesMetadataProvider: Dispatch<SetStateAction<ProxySeriesMetadataProvider>>;
   setProxyAiometadataProvider: Dispatch<SetStateAction<ProxyEpisodeProvider>>;
   setPosterQualityBadgesPosition: Dispatch<SetStateAction<PosterQualityBadgesPosition>>;
   setQualityBadgesSide: Dispatch<SetStateAction<QualityBadgesSide>>;
@@ -154,6 +161,12 @@ type HomePageViewActions = {
   toggleRatingPreference: (rating: RatingPreference) => void;
   reorderRatingPreference: (fromIndex: number, toIndex: number) => void;
   updateProxyManifestUrl: (value: string) => void;
+  updateProxyCatalogName: (key: string, value: string) => void;
+  toggleProxyCatalogHidden: (key: string) => void;
+  toggleProxyCatalogSearchDisabled: (key: string) => void;
+  setProxyCatalogDiscoverOnly: (key: string, enabled: boolean) => void;
+  resetProxyCatalogNames: () => void;
+  resetProxyCatalogCustomizations: () => void;
   toggleProxyEnabledType: (type: ProxyType) => void;
   toggleProxyTranslateMeta: () => void;
   toggleConfigStringVisibility: () => void;
@@ -195,10 +208,21 @@ const AIOMETADATA_EPISODE_PROVIDER_OPTIONS: Array<{ id: AiometadataEpisodeProvid
   { id: 'realimdb', label: 'IMDb' },
   { id: 'tvdb', label: 'TVDB' },
 ];
+const PROXY_SERIES_METADATA_PROVIDER_OPTIONS: Array<{ id: ProxySeriesMetadataProvider; label: string }> = [
+  { id: 'tmdb', label: 'TMDB' },
+  { id: 'imdb', label: 'IMDb' },
+];
 const PROXY_EPISODE_PROVIDER_OPTIONS: Array<{ id: ProxyEpisodeProvider; label: string }> = [
   { id: 'realimdb', label: 'IMDb' },
   { id: 'custom', label: 'Custom' },
 ];
+const isCinemetaManifestUrl = (value: string) => {
+  try {
+    return /(^|[-.])cinemeta\.strem\.io$/i.test(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
 
 export function HomePageView({ refs, state, derived, actions }: HomePageViewProps) {
   const { navRef } = refs;
@@ -211,6 +235,14 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     mdblistKey,
     simklClientId,
     proxyManifestUrl,
+    proxyCatalogs,
+    proxyCatalogNames,
+    proxyHiddenCatalogs,
+    proxySearchDisabledCatalogs,
+    proxyDiscoverOnlyCatalogs,
+    proxyCatalogsStatus,
+    proxyCatalogsError,
+    proxySeriesMetadataProvider,
     proxyAiometadataProvider,
     proxyEnabledTypes,
     proxyTranslateMeta,
@@ -283,6 +315,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     setThumbnailVerticalBadgeContent,
     setThumbnailSize,
     setAiometadataEpisodeProvider,
+    setProxySeriesMetadataProvider,
     setProxyAiometadataProvider,
     setPosterQualityBadgesPosition,
     setQualityBadgesSide,
@@ -293,17 +326,81 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     toggleRatingPreference,
     reorderRatingPreference,
     updateProxyManifestUrl,
+    updateProxyCatalogName,
+    toggleProxyCatalogHidden,
+    toggleProxyCatalogSearchDisabled,
+    setProxyCatalogDiscoverOnly,
+    resetProxyCatalogCustomizations,
     toggleProxyEnabledType,
     toggleProxyTranslateMeta,
     toggleConfigStringVisibility,
     toggleProxyUrlVisibility,
   } = actions;
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const shouldShowVerticalBadgeContent =
     (previewType === 'poster' && isVerticalPosterRatingLayout(posterRatingsLayout)) ||
     (previewType === 'backdrop' && backdropRatingsLayout === 'right-vertical') ||
     (previewType === 'thumbnail' && thumbnailRatingsLayout.endsWith('-vertical'));
   const activeVerticalBadgeContent =
     previewType === 'poster' ? posterVerticalBadgeContent : previewType === 'thumbnail' ? thumbnailVerticalBadgeContent : backdropVerticalBadgeContent;
+  const normalizedProxyManifestUrl = proxyManifestUrl.trim().toLowerCase();
+  const isAiometadataProxyManifest = normalizedProxyManifestUrl.includes('aiometadata');
+  const isCinemetaProxyManifest = isCinemetaManifestUrl(proxyManifestUrl.trim());
+  const canConfigureCatalogs =
+    Boolean(normalizedProxyManifestUrl) &&
+    normalizedProxyManifestUrl !== 'http://' &&
+    normalizedProxyManifestUrl !== 'https://';
+  const isCatalogModalVisible = isCatalogModalOpen && canConfigureCatalogs;
+  const customizedCatalogCount = Object.keys(proxyCatalogNames).length;
+  const hiddenCatalogCount = proxyHiddenCatalogs.length;
+  const searchDisabledCatalogCount = proxySearchDisabledCatalogs.length;
+  const discoverOnlyOverrideCount = Object.keys(proxyDiscoverOnlyCatalogs).length;
+  const discoverOnlyCatalogCount = proxyCatalogs.filter(
+    (catalog) => (proxyDiscoverOnlyCatalogs[catalog.key] ?? catalog.discoverOnly) === true
+  ).length;
+  const hasCatalogCustomizations =
+    customizedCatalogCount > 0 ||
+    hiddenCatalogCount > 0 ||
+    searchDisabledCatalogCount > 0 ||
+    discoverOnlyOverrideCount > 0;
+
+  useEffect(() => {
+    if (!isCatalogModalVisible) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsCatalogModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCatalogModalVisible]);
+
+  useEffect(() => {
+    if (!isCatalogModalVisible) {
+      return;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'contain';
+    document.documentElement.style.overscrollBehavior = 'contain';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+    };
+  }, [isCatalogModalVisible]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#06070b] text-slate-200 selection:bg-orange-400/30 font-[var(--font-body)]">
@@ -540,7 +637,11 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1 mb-1"><Globe2 className="w-3 h-3" /> Lang</span>
                         <div className="relative">
                           <select value={lang} onChange={(e) => setLang(e.target.value)} className="w-full bg-[#080b10] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white appearance-none outline-none focus:border-orange-500/50">
-                            {supportedLanguages.map(l => <option key={l.code} value={l.code} className="bg-[#0b0f15]">{l.flag} {l.label}</option>)}
+                            {supportedLanguages.map((language) => (
+                              <option key={language.code} value={language.code} className="bg-[#0b0f15]">
+                                {language.flag} {language.label}
+                              </option>
+                            ))}
                           </select>
                           <ChevronRight className="w-3 h-3 text-slate-500 absolute right-2 top-2.5 pointer-events-none stroke-2 rotate-90" />
                         </div>
@@ -824,7 +925,82 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                       className="w-full bg-[#080b10] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white focus:border-orange-500/50 outline-none"
                     />
                   </div>
-                  {proxyManifestUrl.toLowerCase().includes('aiometadata') && (
+                  {canConfigureCatalogs && (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsCatalogModalOpen(true)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#0b0f15] px-3 py-2 text-[11px] font-semibold text-slate-200 transition-colors hover:bg-[#141b26]"
+                        >
+                          <Layers className="h-3.5 w-3.5" />
+                          <span>Configure Catalogs</span>
+                        </button>
+                        {customizedCatalogCount > 0 && (
+                          <div className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-[10px] font-semibold text-orange-200">
+                            {customizedCatalogCount} custom name{customizedCatalogCount === 1 ? '' : 's'}
+                          </div>
+                        )}
+                        {hiddenCatalogCount > 0 && (
+                          <div className="rounded-full border border-white/10 bg-[#141b26] px-2 py-1 text-[10px] font-semibold text-slate-300">
+                            {hiddenCatalogCount} hidden
+                          </div>
+                        )}
+                        {searchDisabledCatalogCount > 0 && (
+                          <div className="rounded-full border border-white/10 bg-[#141b26] px-2 py-1 text-[10px] font-semibold text-slate-300">
+                            {searchDisabledCatalogCount} search off
+                          </div>
+                        )}
+                        {discoverOnlyCatalogCount > 0 && (
+                          <div className="rounded-full border border-white/10 bg-[#141b26] px-2 py-1 text-[10px] font-semibold text-slate-300">
+                            {discoverOnlyCatalogCount} discover only
+                          </div>
+                        )}
+                      </div>
+                      {proxyCatalogsStatus === 'loading' && (
+                        <p className="text-[10px] text-slate-500">Loading catalogs from the source manifest...</p>
+                      )}
+                      {proxyCatalogsStatus === 'ready' && proxyCatalogs.length > 0 && customizedCatalogCount === 0 && (
+                        <p className="text-[10px] text-slate-500">
+                          {proxyCatalogs.length} catalog{proxyCatalogs.length === 1 ? '' : 's'} detected.
+                        </p>
+                      )}
+                      {proxyCatalogsStatus === 'ready' && proxyCatalogs.length === 0 && (
+                        <p className="text-[10px] text-slate-500">This manifest does not expose any catalogs.</p>
+                      )}
+                      {proxyCatalogsStatus === 'error' && (
+                        <p className="text-[10px] text-red-300">{proxyCatalogsError}</p>
+                      )}
+                      <p className="text-[10px] text-slate-600">
+                        Discover-only keeps the catalog available in Discover without showing it on the home rows.
+                      </p>
+                    </div>
+                  )}
+                  {canConfigureCatalogs && isCinemetaProxyManifest && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-slate-500">Cinemeta uses IMDb IDs for series automatically, so ERDB will use <span className="text-slate-300 font-medium">`realimdb:`</span> for episode thumbnails without asking for a provider selection.</p>
+                    </div>
+                  )}
+                  {canConfigureCatalogs && !isAiometadataProxyManifest && !isCinemetaProxyManifest && (
+                    <div className="space-y-2">
+                      <div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 block mb-1.5">Series Metadata Provider</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {PROXY_SERIES_METADATA_PROVIDER_OPTIONS.map((option) => (
+                            <button
+                              key={`proxy-series-provider-${option.id}`}
+                              type="button"
+                              onClick={() => setProxySeriesMetadataProvider(option.id)}
+                              className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${proxySeriesMetadataProvider === option.id ? 'border-orange-500/60 bg-[#141b26] text-white' : 'border-white/10 bg-[#0b0f15] text-slate-400 hover:text-white'}`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {isAiometadataProxyManifest && (
                     <div className="space-y-2">
                       <p className="text-[11px] text-slate-500">The proxy cannot reliably distinguish AIOMetadata series from anime in every case, so use the same provider for both. Select <span className="text-slate-300 font-medium">IMDb</span> if AIOMetadata uses IMDb as the meta provider for both series and anime, so ERDB can upgrade `tt...` IDs to `realimdb:`. If AIOMetadata uses TVDB internally but still forces IMDb `tt...` IDs in its output, the proxy cannot detect that and cannot convert those IDs to `tvdb:` automatically. Select <span className="text-slate-300 font-medium">Custom</span> to keep the addon IDs exactly as they are.</p>
                       <div>
@@ -1076,7 +1252,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                       </tr>
                       <tr>
                         <td className="px-5 py-2 font-mono text-orange-400 text-xs">lang</td>
-                        <td className="px-5 py-2 text-slate-400 text-xs">{supportedLanguages.map((language) => language.code).join(', ')}</td>
+                        <td className="px-5 py-2 text-slate-400 text-xs">TMDB language codes, for example en, es-ES, es-MX, pt-PT, pt-BR</td>
                         <td className="px-5 py-2 text-slate-500 text-xs">en</td>
                       </tr>
                       <tr>
@@ -1339,7 +1515,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                   <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
                     <div className="flex gap-2">
                       <span className="text-orange-500 font-bold shrink-0">lang (optional):</span>
-                      <span className="text-slate-400">All TMDB ISO 639-1 codes are supported (en, it, fr, es, de, etc.). Default: en.</span>
+                      <span className="text-slate-400">TMDB language codes are supported (en, es-ES, es-MX, pt-PT, pt-BR, etc.). Default: en.</span>
                     </div>
                     <div className="flex gap-2">
                       <span className="text-orange-500 font-bold shrink-0">id (required):</span>
@@ -1419,7 +1595,7 @@ backdropRatings         | tmdb, mdblist, imdb, tomatoes, tomatoesaudience, lette
 logoRatings             | tmdb, mdblist, imdb, tomatoes, tomatoesaudience, letterboxd,         | all
                         | metacritic, metacriticuser, trakt, simkl, rogerebert,               |
                         | myanimelist, anilist, kitsu (logo only)                             |
-lang                    | Any TMDB ISO 639-1 code (en, it, fr, es, de, ja, ko, etc.)            | en
+lang                    | Any TMDB language code (en, es-ES, es-MX, pt-PT, pt-BR, etc.)        | en
 streamBadges            | auto, on, off (global fallback)                                      | auto
 posterStreamBadges      | auto, on, off (poster only)                                          | auto
 backdropStreamBadges    | auto, on, off (backdrop only)                                        | auto
@@ -1443,6 +1619,7 @@ mdblistKey (REQUIRED)   | Your MDBList.com API Key                              
 simklClientId (OPTIONAL)| Your SIMKL client_id for direct SIMKL ratings                        | -
 
 TMDB NOTE: Always prefer tmdb:movie:id or tmdb:tv:id. Using bare tmdb:id can collide between movie and tv.
+LANG NOTE: Pass cfg.lang through exactly as the TMDB language code provided by ERDB (for example en, it, es-ES, pt-BR).
 
 --- INTEGRATION REQUIREMENTS ---
 1. Use ONLY the "erdbConfig" field (no modal and no extra settings panels).
@@ -1497,6 +1674,172 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
           </p>
         </div>
       </footer>
+      {isCatalogModalVisible && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-white/10 bg-[#0b0f15] shadow-[0_40px_120px_-60px_rgba(0,0,0,0.9)]">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+              <div>
+                <h4 className="text-lg font-[var(--font-display)] text-white">Configure Catalogs</h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  Customize the catalog names exposed by the generated proxy manifest.
+                </p>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Discover-only is supported by adding a required `discover` extra. Keep in mind that Stremio expects no more than one required extra per catalog.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={resetProxyCatalogCustomizations}
+                  disabled={!hasCatalogCustomizations}
+                  className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${hasCatalogCustomizations ? 'border border-white/10 bg-[#141b26] text-slate-200 hover:bg-[#1a2331]' : 'border border-white/5 bg-[#080b10] text-slate-600 cursor-not-allowed'}`}
+                >
+                  Reset All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCatalogModalOpen(false)}
+                  className="rounded-lg border border-white/10 bg-[#141b26] px-3 py-1.5 text-[11px] font-semibold text-slate-200 transition-colors hover:bg-[#1a2331]"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[75vh] overflow-auto overscroll-contain px-5 py-4">
+              {proxyCatalogsStatus === 'loading' && (
+                <div className="rounded-2xl border border-white/10 bg-[#080b10] p-4 text-sm text-slate-400">
+                  Loading catalogs from the manifest...
+                </div>
+              )}
+              {proxyCatalogsStatus === 'error' && (
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+                  {proxyCatalogsError || 'Unable to load catalogs from the source manifest.'}
+                </div>
+              )}
+              {proxyCatalogsStatus === 'ready' && proxyCatalogs.length === 0 && (
+                <div className="rounded-2xl border border-white/10 bg-[#080b10] p-4 text-sm text-slate-400">
+                  This manifest does not include configurable catalogs.
+                </div>
+              )}
+              {proxyCatalogs.length > 0 && (
+                <div className="space-y-3">
+                  {proxyCatalogs.map((catalog) => {
+                    const overrideValue = proxyCatalogNames[catalog.key] || '';
+                    const isHidden = proxyHiddenCatalogs.includes(catalog.key);
+                    const isSearchDisabled = proxySearchDisabledCatalogs.includes(catalog.key);
+                    const isDiscoverOnly = proxyDiscoverOnlyCatalogs[catalog.key] ?? catalog.discoverOnly;
+                    const blockingRequiredExtraKeys = catalog.requiredExtraKeys.filter(
+                      (name) => name !== 'discover'
+                    );
+                    const canSetDiscoverOnly = blockingRequiredExtraKeys.length === 0;
+                    return (
+                      <div
+                        key={catalog.key}
+                        className="rounded-2xl border border-white/10 bg-[#080b10]/90 p-4"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-white">{catalog.name}</div>
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              {[catalog.type || 'catalog', catalog.id].filter(Boolean).join(' / ')}
+                            </div>
+                            {catalog.extraKeys.length > 0 && (
+                              <div className="mt-1 text-[10px] text-slate-600">
+                                Extras: {catalog.extraKeys.join(', ')}
+                              </div>
+                            )}
+                            {catalog.supportsSearch && (
+                              <div className="mt-1 text-[10px] text-slate-600">
+                                Search: {catalog.searchRequired ? 'search only' : 'search + catalog'}
+                              </div>
+                            )}
+                          </div>
+                          {overrideValue && (
+                            <button
+                              type="button"
+                              onClick={() => updateProxyCatalogName(catalog.key, '')}
+                              className="rounded-lg border border-white/10 bg-[#141b26] px-2.5 py-1 text-[10px] font-semibold text-slate-300 transition-colors hover:bg-[#1a2331]"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleProxyCatalogHidden(catalog.key)}
+                            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${isHidden ? 'border-orange-500/50 bg-orange-500/10 text-orange-200' : 'border-white/10 bg-[#141b26] text-slate-300 hover:bg-[#1a2331]'}`}
+                          >
+                            {isHidden ? 'Hidden' : 'Visible'}
+                          </button>
+                          {catalog.supportsSearch && (
+                            <button
+                              type="button"
+                              onClick={() => toggleProxyCatalogSearchDisabled(catalog.key)}
+                              className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${isSearchDisabled ? 'border-orange-500/50 bg-orange-500/10 text-orange-200' : 'border-white/10 bg-[#141b26] text-slate-300 hover:bg-[#1a2331]'}`}
+                            >
+                              {isSearchDisabled ? 'Search Off' : 'Search On'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={!canSetDiscoverOnly}
+                            onClick={() => setProxyCatalogDiscoverOnly(catalog.key, !isDiscoverOnly)}
+                            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${!canSetDiscoverOnly ? 'border border-white/5 bg-[#080b10] text-slate-600 cursor-not-allowed' : isDiscoverOnly ? 'border-orange-500/50 bg-orange-500/10 text-orange-200' : 'border-white/10 bg-[#141b26] text-slate-300 hover:bg-[#1a2331]'}`}
+                          >
+                            {isDiscoverOnly ? 'Discover Only' : 'Home + Discover'}
+                          </button>
+                        </div>
+                        <div className="mt-3">
+                          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                            Custom Name
+                          </label>
+                          <input
+                            type="text"
+                            value={overrideValue}
+                            onChange={(event) => updateProxyCatalogName(catalog.key, event.target.value)}
+                            placeholder={catalog.name}
+                            className="w-full rounded-lg border border-white/10 bg-[#0b0f15] px-2.5 py-2 text-xs text-white outline-none focus:border-orange-500/50"
+                          />
+                          <p className="mt-2 text-[10px] text-slate-500">
+                            {overrideValue
+                              ? `Proxy manifest name: ${overrideValue}`
+                              : 'Leave empty to keep the original catalog name.'}
+                          </p>
+                          {isHidden && (
+                            <p className="mt-1 text-[10px] text-slate-600">
+                              {catalog.supportsSearch && !isSearchDisabled
+                                ? 'This catalog will stay searchable, but it will be converted to search-only so it no longer appears in home/discover.'
+                                : 'This catalog will be removed from the generated manifest.'}
+                            </p>
+                          )}
+                          {catalog.supportsSearch && isSearchDisabled && (
+                            <p className="mt-1 text-[10px] text-slate-600">
+                              {catalog.searchRequired
+                                ? 'This is a search-only catalog, so disabling search removes it from the generated manifest.'
+                                : 'Search support will be removed, but the catalog itself will stay available.'}
+                            </p>
+                          )}
+                          {!canSetDiscoverOnly && (
+                            <p className="mt-1 text-[10px] text-slate-600">
+                              Discover-only is unavailable while this catalog still has another required extra: {blockingRequiredExtraKeys.join(', ')}.
+                            </p>
+                          )}
+                          {canSetDiscoverOnly && isDiscoverOnly && (
+                            <p className="mt-1 text-[10px] text-slate-600">
+                              This catalog will stay available in Discover without appearing on the home rows.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </div>
   );

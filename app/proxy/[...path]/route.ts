@@ -9,6 +9,7 @@ import {
   parseAddonBaseUrl,
   type ProxyConfig,
 } from '@/lib/addonProxy';
+import { applyProxyCatalogOverrides, unwrapProxyCatalogVariantId } from '@/lib/proxyCatalog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -124,7 +125,7 @@ const resolveAnimeToTmdb = async (
   provider: string,
   externalId: string,
 ) => {
-  const url = `https://animemapping.stremio.dpdns.org/${provider}/${encodeURIComponent(externalId)}?ep=1`;
+  const url = `https://animemapping.realbestia.com/${provider}/${encodeURIComponent(externalId)}?ep=1`;
   const data = await fetchAnimemappingJson(url);
   if (!data) return null;
   
@@ -427,7 +428,7 @@ const translateMetaPayload = async (
   }
 
   const nextMeta: Record<string, unknown> = { ...meta };
-  translateTextFields(nextMeta, null, translatedOverview);
+  translateTextFields(nextMeta, translatedTitle, translatedOverview);
 
   if (tmdbRef.type === 'tv' && Array.isArray(nextMeta.videos) && nextMeta.videos.length > 0) {
     const videos = nextMeta.videos as Array<Record<string, unknown>>;
@@ -528,13 +529,17 @@ const isAnimeMeta = (meta: Record<string, unknown>, rawType: string | null, rawI
   return genres.some((genre) => typeof genre === 'string' && genre.trim().toLowerCase() === 'anime');
 };
 
-const applyConfiguredEpisodeProvider = (
+const applyConfiguredSeriesProvider = (
   normalized: string,
+  normalizedType: 'movie' | 'tv' | null,
   provider: string | undefined
 ) => {
+  if (normalizedType !== 'tv') return normalized;
   if (!provider) return normalized;
   if (provider === 'custom') return normalized;
-  if (provider === 'realimdb' && /^tt\d+$/i.test(normalized)) return `realimdb:${normalized}`;
+  if ((provider === 'realimdb' || provider === 'imdb') && /^tt\d+$/i.test(normalized)) {
+    return `realimdb:${normalized}`;
+  }
   return normalized;
 };
 
@@ -545,15 +550,24 @@ const normalizeProxyErdbId = (
   meta?: Record<string, unknown>,
   requestedType?: string | null
 ) => {
-  const normalized = normalizeErdbId(rawId, rawType);
+  const normalizedType = normalizeStremioType(rawType) || normalizeStremioType(requestedType);
+  const normalized = normalizeErdbId(rawId, normalizedType || rawType || requestedType);
   if (!normalized) return null;
-  const normalizedType = normalizeStremioType(rawType);
   if (isAiometadataManifestUrl(config.url)) {
     if (normalizedType === 'movie') {
       return normalized;
     }
     const provider = config.aiometadataProvider;
-    return applyConfiguredEpisodeProvider(normalized, provider);
+    return applyConfiguredSeriesProvider(normalized, normalizedType, provider);
+  }
+
+  const configuredSeriesId = applyConfiguredSeriesProvider(
+    normalized,
+    normalizedType,
+    config.seriesMetadataProvider
+  );
+  if (configuredSeriesId !== normalized) {
+    return configuredSeriesId;
   }
   if (!isCinemetaManifestUrl(config.url)) return normalized;
 
@@ -568,6 +582,14 @@ const isTypeEnabled = (config: ProxyConfig, type: 'poster' | 'backdrop' | 'logo'
   if (type === 'backdrop') return config.backdropEnabled !== false;
   if (type === 'logo') return config.logoEnabled !== false;
   return config.thumbnailEnabled !== false;
+};
+
+// Kitsu episode thumbnails use a seasonless `kitsu:id:episode` shape.
+const buildEpisodeErdbId = (baseErdbId: string, seasonValue: number, episodeValue: number) => {
+  if (baseErdbId.toLowerCase().startsWith('kitsu:')) {
+    return `${baseErdbId}:${episodeValue}`;
+  }
+  return `${baseErdbId}:${seasonValue}:${episodeValue}`;
 };
 
 const rewriteMetaVideoThumbnails = (
@@ -599,7 +621,7 @@ const rewriteMetaVideoThumbnails = (
       return video;
     }
 
-    const episodeErdbId = `${erdbId}:${seasonValue}:${episodeValue}`;
+    const episodeErdbId = buildEpisodeErdbId(erdbId, seasonValue, episodeValue);
     return {
       ...typedVideo,
       thumbnail: buildErdbImageUrl({
@@ -745,6 +767,12 @@ export async function GET(
       id: proxyId,
       name: `ERDB Proxy - ${originalName}`,
       description: `${originalDescription} (proxied via ERDB)`,
+      catalogs: applyProxyCatalogOverrides(manifest.catalogs, {
+        names: config.catalogNames,
+        hidden: config.hiddenCatalogs,
+        searchDisabled: config.searchDisabledCatalogs,
+        discoverOnly: config.discoverOnlyCatalogs,
+      }),
     };
 
     return NextResponse.json(proxyManifest, { status: 200, headers: corsHeaders });
@@ -763,9 +791,18 @@ export async function GET(
       ? (resourceSegments[1] || null)
       : null;
   const forwardUrl = new URL(originBase);
+  const normalizedResourceSegments =
+    resource === 'catalog' && resourceSegments[2]
+      ? [
+          resourceSegments[0],
+          resourceSegments[1],
+          unwrapProxyCatalogVariantId(resourceSegments[2]),
+          ...resourceSegments.slice(3),
+        ]
+      : resourceSegments;
   // Preserve Stremio "extra" path segments like `search=...` and `skip=...`.
   // Encoding each segment would turn `=` into `%3D`, breaking upstream parsing.
-  forwardUrl.pathname = `${forwardUrl.pathname.replace(/\/$/, '')}/${resourceSegments.join('/')}`;
+  forwardUrl.pathname = `${forwardUrl.pathname.replace(/\/$/, '')}/${normalizedResourceSegments.join('/')}`;
 
   const forwardParams = new URLSearchParams();
   for (const [key, value] of searchParams.entries()) {
