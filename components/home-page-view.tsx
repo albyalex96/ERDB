@@ -983,7 +983,6 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                   )}
                   {canConfigureCatalogs && !isAiometadataProxyManifest && !isCinemetaProxyManifest && (
                     <div className="space-y-2">
-                      <p className="text-[11px] text-slate-500">Select <span className="text-slate-300 font-medium">IMDb</span> if the addon uses IMDb `tt...` IDs for series. ERDB will rewrite those TV IDs to <span className="text-slate-300 font-medium">`realimdb:`</span> so series artwork and episode thumbnails resolve correctly. Select <span className="text-slate-300 font-medium">TMDB</span> to keep the addon series IDs unchanged.</p>
                       <div>
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 block mb-1.5">Series Metadata Provider</span>
                         <div className="flex flex-wrap gap-1.5">
