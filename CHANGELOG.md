@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.19](https://github.com/realbestia1/erdb/compare/v0.1.18...v0.1.19) - 2026-03-31
+
+- Fix npm run build failure caused by AiOMetadata TVDB thumbnail type check ([5a65003](https://github.com/realbestia1/erdb/commit/5a65003fe8112d5ce0c16492944c28d7ee51f4e4))
+
 ## [0.1.18](https://github.com/realbestia1/erdb/compare/v0.1.17...v0.1.18) - 2026-03-31
 
 - Add TVDB-aware AiOMetadata thumbnail mapping and expose TVDB in proxy UI ([c1013b8](https://github.com/realbestia1/erdb/commit/c1013b80c9cc76a9689720e30705ede392173a1f))
