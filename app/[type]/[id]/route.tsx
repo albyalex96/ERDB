@@ -5211,10 +5211,15 @@ export async function GET(
             episode.length > 0;
 
           if (shouldResolveTvdbAiredOrder) {
+            if (typeof season !== 'string' || typeof episode !== 'string') {
+              throw new HttpError('TVDB season and episode are required for Aiometadata TVDB thumbnails', 400);
+            }
+            const requestedTvdbSeason = season;
+            const requestedTvdbEpisode = episode;
             const mappedEpisode = await resolveImdbEpisodeWithTvdbOrderToTmdb(
               rawImdbSeriesId,
-              season,
-              episode,
+              requestedTvdbSeason,
+              requestedTvdbEpisode,
               tmdbKey,
               phases
             );
