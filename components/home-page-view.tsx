@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useState, type ChangeEvent, type Dispatch, type MouseEvent, type RefObject, type SetStateAction } from 'react';
 import type { ProxyCatalogDescriptor } from '@/lib/proxyCatalog';
 import type { SupportedLanguage } from '@/lib/tmdbLanguage';
@@ -56,7 +57,7 @@ type PosterQualityBadgesPosition = 'auto' | QualityBadgesSide;
 type AiometadataPatternType = 'poster' | 'background' | 'logo' | 'episodeThumbnail';
 type AiometadataEpisodeProvider = 'tvdb' | 'realimdb';
 type ProxySeriesMetadataProvider = 'tmdb' | 'imdb';
-type ProxyEpisodeProvider = 'custom' | 'realimdb';
+type ProxyEpisodeProvider = 'custom' | 'realimdb' | 'tvdb';
 type VerticalBadgeContent = 'standard' | 'stacked';
 
 type HomePageViewState = {
@@ -84,6 +85,7 @@ type HomePageViewState = {
   importMessage: string;
   posterRatingsLayout: PosterRatingLayout;
   posterRatingsMaxPerSide: number | null;
+  logoRatingsMax: number | null;
   backdropRatingsLayout: BackdropRatingLayout;
   thumbnailRatingsLayout: ThumbnailRatingLayout;
   posterVerticalBadgeContent: VerticalBadgeContent;
@@ -143,6 +145,7 @@ type HomePageViewActions = {
   setSimklClientId: Dispatch<SetStateAction<string>>;
   setPosterRatingsLayout: Dispatch<SetStateAction<PosterRatingLayout>>;
   setPosterRatingsMaxPerSide: Dispatch<SetStateAction<number | null>>;
+  setLogoRatingsMax: Dispatch<SetStateAction<number | null>>;
   setBackdropRatingsLayout: Dispatch<SetStateAction<BackdropRatingLayout>>;
   setThumbnailRatingsLayout: Dispatch<SetStateAction<ThumbnailRatingLayout>>;
   setPosterVerticalBadgeContent: Dispatch<SetStateAction<VerticalBadgeContent>>;
@@ -214,6 +217,7 @@ const PROXY_SERIES_METADATA_PROVIDER_OPTIONS: Array<{ id: ProxySeriesMetadataPro
 ];
 const PROXY_EPISODE_PROVIDER_OPTIONS: Array<{ id: ProxyEpisodeProvider; label: string }> = [
   { id: 'realimdb', label: 'IMDb' },
+  { id: 'tvdb', label: 'TVDB' },
   { id: 'custom', label: 'Custom' },
 ];
 const isCinemetaManifestUrl = (value: string) => {
@@ -251,6 +255,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     importMessage,
     posterRatingsLayout,
     posterRatingsMaxPerSide,
+    logoRatingsMax,
     backdropRatingsLayout,
     thumbnailRatingsLayout,
     posterVerticalBadgeContent,
@@ -308,6 +313,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     setSimklClientId,
     setPosterRatingsLayout,
     setPosterRatingsMaxPerSide,
+    setLogoRatingsMax,
     setBackdropRatingsLayout,
     setThumbnailRatingsLayout,
     setPosterVerticalBadgeContent,
@@ -425,7 +431,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
               <div className="flex flex-wrap items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                 <a href="#preview" onClick={handleAnchorClick} className="px-3 py-2 rounded-full hover:text-white hover:bg-white/[0.04] transition-colors">Configurator</a>
                 <a href="#proxy" onClick={handleAnchorClick} className="px-3 py-2 rounded-full hover:text-white hover:bg-white/[0.04] transition-colors">Addon Proxy</a>
-                <a href="#docs" onClick={handleAnchorClick} className="px-3 py-2 rounded-full hover:text-white hover:bg-white/[0.04] transition-colors">API Docs</a>
+                <Link href="/docs" className="px-3 py-2 rounded-full hover:text-white hover:bg-white/[0.04] transition-colors">API Docs</Link>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:justify-center">
@@ -472,9 +478,9 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                 <a href="#preview" onClick={handleAnchorClick} className="px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-slate-100 transition-colors">
                   Open Configurator
                 </a>
-                <a href="#docs" onClick={handleAnchorClick} className="px-6 py-3 rounded-full border border-white/10 bg-white/[0.04] text-white font-semibold hover:bg-white/10 transition-colors">
+                <Link href="/docs" className="px-6 py-3 rounded-full border border-white/10 bg-white/[0.04] text-white font-semibold hover:bg-white/10 transition-colors">
                   Read API Docs
-                </a>
+                </Link>
               </div>
               <div className="flex flex-wrap gap-4 text-xs text-slate-400">
                 <div className="flex items-center gap-2">
@@ -677,7 +683,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                   </div>
                 </div>
 
-                {(previewType === 'poster' || previewType === 'backdrop' || previewType === 'thumbnail') && (
+                {(previewType === 'poster' || previewType === 'backdrop' || previewType === 'thumbnail' || previewType === 'logo') && (
                   <div className="rounded-xl border border-white/10 bg-[#0b0f15]/80 p-3 space-y-3">
                     <div className="text-[11px] font-semibold text-slate-400">Layouts</div>
                     {previewType === 'poster' && (
@@ -727,6 +733,29 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                               <button key={opt.id} onClick={() => setThumbnailSize(opt.id as ThumbnailSize)} className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${thumbnailSize === opt.id ? 'border-orange-500/60 bg-[#141b26] text-white' : 'border-white/10 bg-[#0b0f15] text-slate-400 hover:text-white'}`}>{opt.label}</button>
                             ))}
                           </div>
+                        </div>
+                      </div>
+                    )}
+                    {previewType === 'logo' && (
+                      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 space-y-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Logo Ratings</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Max badges</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={logoRatingsMax ?? ''}
+                            onChange={(e) => setLogoRatingsMax(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                            placeholder="Auto"
+                            className="w-16 bg-[#080b10] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:border-orange-500/50 outline-none"
+                          />
+                          <button
+                            onClick={() => setLogoRatingsMax(null)}
+                            className="rounded-lg border border-white/10 bg-[#0b0f15] px-2 py-1.5 text-[11px] text-slate-300 hover:bg-[#141b26]"
+                          >
+                            Auto
+                          </button>
                         </div>
                       </div>
                     )}
@@ -833,7 +862,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                       <div className={`relative shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl overflow-hidden ${previewType === 'poster'
                         ? 'aspect-[2/3] w-60'
                           : previewType === 'logo'
-                            ? 'h-40 w-full max-w-lg'
+                            ? 'w-full max-w-lg'
                           : 'aspect-video w-full max-w-lg'
                         }`}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -841,7 +870,11 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                           key={previewUrl}
                           src={previewUrl}
                           alt="Preview"
-                          className={`h-full w-full ${previewType === 'logo' ? 'object-contain' : 'object-cover'}`}
+                          className={
+                            previewType === 'logo'
+                              ? 'block w-full h-auto'
+                              : 'h-full w-full object-cover'
+                          }
                         />
                       </div>
                     </div>
@@ -1002,7 +1035,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                   )}
                   {isAiometadataProxyManifest && (
                     <div className="space-y-2">
-                      <p className="text-[11px] text-slate-500">The proxy cannot reliably distinguish AIOMetadata series from anime in every case, so use the same provider for both. Select <span className="text-slate-300 font-medium">IMDb</span> if AIOMetadata uses IMDb as the meta provider for both series and anime, so ERDB can upgrade `tt...` IDs to `realimdb:`. If AIOMetadata uses TVDB internally but still forces IMDb `tt...` IDs in its output, the proxy cannot detect that and cannot convert those IDs to `tvdb:` automatically. Select <span className="text-slate-300 font-medium">Custom</span> to keep the addon IDs exactly as they are.</p>
+                      <p className="text-[11px] text-slate-500">The proxy cannot reliably distinguish AIOMetadata series from anime in every case, so use the same provider for both. Select <span className="text-slate-300 font-medium">IMDb</span> if AIOMetadata uses IMDb as the meta provider for both series and anime, so ERDB can upgrade `tt...` IDs to `realimdb:`. Select <span className="text-slate-300 font-medium">TVDB</span> if AIOMetadata keeps IMDb `tt...` IDs but uses TVDB season and episode numbering for thumbnails: ERDB will bridge IMDb to TVDB aired order automatically when rendering episode thumbnails. Select <span className="text-slate-300 font-medium">Custom</span> to keep the addon IDs exactly as they are.</p>
                       <div>
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 block mb-1.5">AiOMetadata Series/Anime Provider</span>
                         <div className="flex flex-wrap gap-1.5">
@@ -1178,7 +1211,35 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
           </div>
         </section>
 
-        {/* Documentation Section */}
+        <section className="pb-20">
+          <div className="max-w-4xl mx-auto">
+            <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 md:p-10">
+              <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                <div className="max-w-2xl space-y-3">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[10px] uppercase tracking-[0.28em] text-slate-400">
+                    <Code2 className="w-3.5 h-3.5 text-orange-400" />
+                    <span>API Docs</span>
+                  </div>
+                  <h2 className="text-3xl font-[var(--font-display)] text-white">Documentation moved to its own page.</h2>
+                  <p className="text-sm leading-7 text-slate-400">
+                    The full renderer, proxy, helper endpoints, ID formats, and integration notes now live on the dedicated docs page so the homepage stays focused on configuration and previews.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/docs" className="px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-slate-100 transition-colors">
+                    Open API Docs
+                  </Link>
+                  <a href="https://github.com/realbestia1/erdb" className="px-6 py-3 rounded-full border border-white/10 bg-white/[0.04] text-white font-semibold hover:bg-white/10 transition-colors inline-flex items-center gap-2">
+                    <span>View Repo</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {false && (
         <section id="docs" className="scroll-mt-16 pb-20">
           <div className="max-w-4xl mx-auto space-y-8">
             <div className="text-center space-y-2">
@@ -1249,6 +1310,11 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                         <td className="px-5 py-2 font-mono text-orange-400 text-xs">logoRatings</td>
                         <td className="px-5 py-2 text-slate-400 text-xs">tmdb, mdblist, imdb, tomatoes, letterboxd, metacritic, trakt, simkl, myanimelist, anilist, kitsu (logo only)</td>
                         <td className="px-5 py-2 text-slate-500 text-xs">all</td>
+                      </tr>
+                      <tr>
+                        <td className="px-5 py-2 font-mono text-orange-400 text-xs">logoRatingsMax</td>
+                        <td className="px-5 py-2 text-slate-400 text-xs">1-20</td>
+                        <td className="px-5 py-2 text-slate-500 text-xs">auto</td>
                       </tr>
                       <tr>
                         <td className="px-5 py-2 font-mono text-orange-400 text-xs">lang</td>
@@ -1422,8 +1488,8 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                       </tr>
                       <tr>
                         <td className="px-5 py-2 font-mono text-orange-400 text-xs">logo</td>
-                        <td className="px-5 py-2 text-slate-400 text-xs">none (base params only)</td>
-                        <td className="px-5 py-2 text-slate-400 text-xs">-</td>
+                        <td className="px-5 py-2 text-slate-400 text-xs">logoRatingsMax</td>
+                        <td className="px-5 py-2 text-slate-400 text-xs">1-20 (auto if omitted)</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1595,6 +1661,7 @@ backdropRatings         | tmdb, mdblist, imdb, tomatoes, tomatoesaudience, lette
 logoRatings             | tmdb, mdblist, imdb, tomatoes, tomatoesaudience, letterboxd,         | all
                         | metacritic, metacriticuser, trakt, simkl, rogerebert,               |
                         | myanimelist, anilist, kitsu (logo only)                             |
+logoRatingsMax          | Number (1-20)                                                        | auto
 lang                    | Any TMDB language code (en, es-ES, es-MX, pt-PT, pt-BR, etc.)        | en
 streamBadges            | auto, on, off (global fallback)                                      | auto
 posterStreamBadges      | auto, on, off (poster only)                                          | auto
@@ -1631,7 +1698,7 @@ LANG NOTE: Pass cfg.lang through exactly as the TMDB language code provided by E
 poster   -> ratingStyle = cfg.posterRatingStyle, imageText = cfg.posterImageText
 backdrop -> ratingStyle = cfg.backdropRatingStyle, imageText = cfg.backdropImageText
 thumbnail -> ratingStyle = cfg.backdropRatingStyle, thumbnailRatingsLayout = cfg.thumbnailRatingsLayout, thumbnailSize = cfg.thumbnailSize
-logo     -> ratingStyle = cfg.logoRatingStyle (omit imageText)
+logo     -> ratingStyle = cfg.logoRatingStyle, logoRatingsMax = cfg.logoRatingsMax (omit imageText)
 Ratings providers can be set per-type via cfg.posterRatings / cfg.backdropRatings / cfg.logoRatings (fallback to cfg.ratings). Thumbnail ratings are episode-level and currently support TMDB + IMDb only.
 Quality badges style can be set per-type via cfg.posterQualityBadgesStyle / cfg.backdropQualityBadgesStyle (fallback to cfg.qualityBadgesStyle).
 Use cfg.posterVerticalBadgeContent for poster vertical layouts, cfg.backdropVerticalBadgeContent for backdrop, and cfg.thumbnailVerticalBadgeContent for thumbnail vertical layouts when you want icon and value stacked instead of inline.
@@ -1639,7 +1706,7 @@ Use cfg.posterVerticalBadgeContent for poster vertical layouts, cfg.backdropVert
 --- URL BUILD ---
 const typeRatingStyle = type === 'poster' ? cfg.posterRatingStyle : type === 'backdrop' ? cfg.backdropRatingStyle : cfg.logoRatingStyle;
 const typeImageText = type === 'backdrop' ? cfg.backdropImageText : cfg.posterImageText;
-\${cfg.baseUrl}/\${type}/\${id}.jpg?tmdbKey=\${cfg.tmdbKey}&mdblistKey=\${cfg.mdblistKey}&simklClientId=\${cfg.simklClientId}&ratings=\${cfg.ratings}&posterRatings=\${cfg.posterRatings}&backdropRatings=\${cfg.backdropRatings}&logoRatings=\${cfg.logoRatings}&lang=\${cfg.lang}&streamBadges=\${cfg.streamBadges}&posterStreamBadges=\${cfg.posterStreamBadges}&backdropStreamBadges=\${cfg.backdropStreamBadges}&qualityBadgesSide=\${cfg.qualityBadgesSide}&posterQualityBadgesPosition=\${cfg.posterQualityBadgesPosition}&qualityBadgesStyle=\${cfg.qualityBadgesStyle}&posterQualityBadgesStyle=\${cfg.posterQualityBadgesStyle}&backdropQualityBadgesStyle=\${cfg.backdropQualityBadgesStyle}&ratingStyle=\${typeRatingStyle}&imageText=\${typeImageText}&posterRatingsLayout=\${cfg.posterRatingsLayout}&posterRatingsMaxPerSide=\${cfg.posterRatingsMaxPerSide}&backdropRatingsLayout=\${cfg.backdropRatingsLayout}&posterVerticalBadgeContent=\${cfg.posterVerticalBadgeContent}&backdropVerticalBadgeContent=\${cfg.backdropVerticalBadgeContent}&thumbnailVerticalBadgeContent=\${cfg.thumbnailVerticalBadgeContent}
+\${cfg.baseUrl}/\${type}/\${id}.jpg?tmdbKey=\${cfg.tmdbKey}&mdblistKey=\${cfg.mdblistKey}&simklClientId=\${cfg.simklClientId}&ratings=\${cfg.ratings}&posterRatings=\${cfg.posterRatings}&backdropRatings=\${cfg.backdropRatings}&logoRatings=\${cfg.logoRatings}&logoRatingsMax=\${cfg.logoRatingsMax}&lang=\${cfg.lang}&streamBadges=\${cfg.streamBadges}&posterStreamBadges=\${cfg.posterStreamBadges}&backdropStreamBadges=\${cfg.backdropStreamBadges}&qualityBadgesSide=\${cfg.qualityBadgesSide}&posterQualityBadgesPosition=\${cfg.posterQualityBadgesPosition}&qualityBadgesStyle=\${cfg.qualityBadgesStyle}&posterQualityBadgesStyle=\${cfg.posterQualityBadgesStyle}&backdropQualityBadgesStyle=\${cfg.backdropQualityBadgesStyle}&ratingStyle=\${typeRatingStyle}&imageText=\${typeImageText}&posterRatingsLayout=\${cfg.posterRatingsLayout}&posterRatingsMaxPerSide=\${cfg.posterRatingsMaxPerSide}&backdropRatingsLayout=\${cfg.backdropRatingsLayout}&posterVerticalBadgeContent=\${cfg.posterVerticalBadgeContent}&backdropVerticalBadgeContent=\${cfg.backdropVerticalBadgeContent}&thumbnailVerticalBadgeContent=\${cfg.thumbnailVerticalBadgeContent}
 
 For thumbnails use thumbnailRatingsLayout and thumbnailSize instead of imageText.
 Omit imageText when type=logo or type=thumbnail.
@@ -1661,6 +1728,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
           </div>
         </div>
         </section>
+        )}
       </main>
 
       <footer className="border-t border-white/5 py-8 bg-[#080b10]">

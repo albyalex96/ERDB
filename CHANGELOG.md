@@ -2,6 +2,57 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.27](https://github.com/realbestia1/erdb/compare/v0.1.26...v0.1.27) - 2026-04-01
+
+- finalize dedicated API docs flow and bump package version to 0.1.27
+  Kept the new standalone `/docs` page as the single place for API documentation, linked the homepage to it, removed the old duplicated API docs content from the main page UI, and clarified `realimdb:` usage for addons that actually source series or episode metadata from IMDb IDs.
+
+## [0.1.26](https://github.com/realbestia1/erdb/compare/v0.1.25...v0.1.26) - 2026-04-01
+
+- add dedicated API docs page and bump package version to 0.1.26
+  Added a standalone `/docs` page for the ERDB public API surface, linked it from the homepage, documented renderer/proxy/helper endpoints with real query behavior, and clarified that `realimdb:` should be used for addons that actually source series or episode metadata from IMDb IDs.
+
+## [0.1.25](https://github.com/realbestia1/erdb/compare/v0.1.24...v0.1.25) - 2026-03-31
+
+- align anime rating provider logos and bump package version to 0.1.25 ([92dbe86](https://github.com/realbestia1/erdb/commit/92dbe8698914b612ac1ee8dfaea4e33528e16ea6))
+  Updated the anime rating provider badges to use cleaner and more accurate provider assets, with special fixes for MyAnimeList, AniList, and Kitsu rendering. This includes centering and scaling adjustments for MAL, switching AniList to its official icon asset, and replacing the Kitsu badge with the exact favicon asset used by the official Kitsu web app. Also bumped the package version from 0.1.24 to 0.1.25.
+- update ([671b47e](https://github.com/realbestia1/erdb/commit/671b47ef0a437bedfb1f57377361cfca09f57e48))
+
+## [0.1.24](https://github.com/realbestia1/erdb/compare/v0.1.23...v0.1.24) - 2026-03-31
+
+- Bump to v0.1.24 and add configurable logo rating limits ([02885e0](https://github.com/realbestia1/erdb/commit/02885e0e093ff053ec086fe8e1f5255df965ca86))
+  - bump package version to 0.1.24
+  - add logoRatingsMax so logo renders can cap the maximum number of rating badges
+  - expose logoRatingsMax across the renderer, UI, config string, proxy config, and AiOMetadata patterns
+  - preserve empty rating params so disabling all providers correctly bypasses image rendering instead of falling back to all ratings
+  - update .github README and AI integration prompt to document the new logoRatingsMax behavior
+
+## [0.1.23](https://github.com/realbestia1/erdb/compare/v0.1.22...v0.1.23) - 2026-03-31
+
+- Bump to v0.1.23 and refine logo badge rendering ([0b41bf0](https://github.com/realbestia1/erdb/commit/0b41bf0e243d44db83574b18e1c60014c49a3a6f))
+- Update release-from-package.yml ([7926f81](https://github.com/realbestia1/erdb/commit/7926f81823d4f31e39ccafaa063aa94dc00941ff))
+
+## [0.1.22](https://github.com/realbestia1/erdb/compare/v0.1.21...v0.1.22) - 2026-03-31
+
+- refine logo rating rendering ([28c1c2c](https://github.com/realbestia1/erdb/commit/28c1c2c18705d8d72c7c5fbd6f8e4255afcdf921))
+
+## [0.1.21](https://github.com/realbestia1/erdb/compare/v0.1.20...v0.1.21) - 2026-03-31
+
+- switch AiOMetadata non-thumbnail patterns to IMDb IDs ([7a4436b](https://github.com/realbestia1/erdb/commit/7a4436b07684697751a7ed947cdb5260e4751e47))
+
+## [0.1.20](https://github.com/realbestia1/erdb/compare/v0.1.19...v0.1.20) - 2026-03-31
+
+- Bump to v0.1.20 and improve TMDB logo/image rendering ([60dfda6](https://github.com/realbestia1/erdb/commit/60dfda61399d77ef87863fdb80a2c153f79f2ca5))
+- Update docker-image.yml ([831909f](https://github.com/realbestia1/erdb/commit/831909ffaabf9a00b6df3bf2b031a315b1055f0b))
+
+## [0.1.19](https://github.com/realbestia1/erdb/compare/v0.1.18...v0.1.19) - 2026-03-31
+
+- Fix npm run build failure caused by AiOMetadata TVDB thumbnail type check ([5a65003](https://github.com/realbestia1/erdb/commit/5a65003fe8112d5ce0c16492944c28d7ee51f4e4))
+
+## [0.1.18](https://github.com/realbestia1/erdb/compare/v0.1.17...v0.1.18) - 2026-03-31
+
+- Add TVDB-aware AiOMetadata thumbnail mapping and expose TVDB in proxy UI ([c1013b8](https://github.com/realbestia1/erdb/commit/c1013b80c9cc76a9689720e30705ede392173a1f))
+
 ## [0.1.17](https://github.com/realbestia1/erdb/compare/v0.1.16...v0.1.17) - 2026-03-31
 
 - rename proxy metadata selector label and bump to v0.1.17 ([3901517](https://github.com/realbestia1/erdb/commit/3901517d02c537ea1fe862bbc65f12a6b247d3aa))
